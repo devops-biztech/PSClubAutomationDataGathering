@@ -34,7 +34,8 @@
         'Set-AccessToken',
         'Install-RequiredModules',
         'Import-Env',
-        'Update-TokenIfExpired'
+        'Update-TokenIfExpired',
+        'Get-AccessTokenFromDb'
     )
 
     # Cmdlets to export from this module

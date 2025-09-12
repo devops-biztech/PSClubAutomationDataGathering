@@ -238,3 +238,18 @@ function Update-TokenIfExpired {
         Write-Error "Failed to refresh token: $_"
     }
 }
+function Get-AccessTokenFromDb {
+    param([Parameter(Mandatory)][string]$DbPath)
+    [void][System.Reflection.Assembly]::LoadWithPartialName('System.Data.SQLite')
+    $conn = New-Object System.Data.SQLite.SQLiteConnection "Data Source=$DbPath;Version=3;"
+    $conn.Open()
+    try {
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "
+            SELECT at.accessToken
+            FROM AccessToken at
+            WHERE at.id = (SELECT id FROM AccessToken LIMIT 1)
+            LIMIT 1;"
+        return ($cmd.ExecuteScalar()).Trim()
+    } finally { $conn.Close() }
+}
