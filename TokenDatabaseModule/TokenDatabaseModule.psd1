@@ -23,36 +23,30 @@
     # Copyright statement for this module
     Copyright = '© 2025 Biztech. All rights reserved.'
 
-    # Functions to export from this module
-    FunctionsToExport = @(
-        'Initialize-EnvFile',
-        'Test-EnvVariables',
-        'Initialize-Database',
-        'Initialize-RefreshTokenTable',
-        'Initialize-AccessTokenTable',
-        'Set-RefreshToken',
-        'Set-AccessToken',
+    
+FunctionsToExport = @(
         'Install-RequiredModules',
+        'Initialize-EnvFile',
         'Import-Env',
-        'Update-TokenIfExpired',
-        'Get-AccessTokenFromDb'
+        'Write-CurrentProcessVariables',
+        'Test-DatabaseExistence',
+        'Test-TokenTableExists',
+        'Get-TokenRecord',
+        'Update-ProcessVariablesFromDatabase',
+        'Test-AccessTokenExpired',
+        'Request-DaxkoToken',
+        'Update-TokenInDb'
     )
-
-    # Cmdlets to export from this module
     CmdletsToExport = @()
-
-    # Variables to export from this module
     VariablesToExport = @()
-
-    # Aliases to export from this module
     AliasesToExport = @()
-
-    # Private data to pass to the module specified in RootModule
-    PrivateData = @{}
-
-    # Help info URI
-    HelpInfoURI = ''
-
-    # Default prefix for exported commands
-    DefaultCommandPrefix = ''
+    PrivateData = @{
+        PSData = @{
+            Tags = @('Environment', 'SQLite', 'Token', 'Management')
+            LicenseUri = ''
+            ProjectUri = ''
+            IconUri = ''
+            ReleaseNotes = 'Initial release.'
+        }
+    }
 }
