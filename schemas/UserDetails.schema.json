@@ -1,0 +1,48 @@
+{
+    "Name": "UserDetails",
+    "APIURL": "https://api.partners.daxko.com/api/v1/reports/1",
+    "APITYPE": "POST",
+    "uniqueID": "SystemId",
+    "RequestBody": {
+        "startDate": "2000-01-01",
+        "endDate": "2030-01-01",
+        "format": "csv",
+        "pageSize": "250",
+        "criteriaFields": {
+            "user": {
+                "memberstatus": ["Active"]
+            }
+        }
+    },
+    "Columns": [
+        { "Name": "SystemId", "Type": "TEXT" },
+        { "Name": "FirstName", "Type": "TEXT" },
+        { "Name": "LastName", "Type": "TEXT" },
+        { "Name": "Email", "Type": "TEXT" },
+        { "Name": "Age", "Type": "INTEGER" },
+        { "Name": "Gender", "Type": "TEXT" },
+        { "Name": "BirthDate", "Type": "TEXT" },
+        { "Name": "Joined", "Type": "TEXT" },
+        { "Name": "LateFeeExempt", "Type": "BOOLEAN" },
+        { "Name": "Status", "Type": "TEXT" },
+        { "Name": "City", "Type": "TEXT" },
+        { "Name": "GuestVisits", "Type": "INTEGER" },
+        { "Name": "AccountHolder", "Type": "TEXT" },
+        { "Name": "DependentCount", "Type": "INTEGER" },
+        { "Name": "Employer", "Type": "TEXT" },
+        { "Name": "LastCheckInDate", "Type": "TEXT" },
+        { "Name": "MemberSince", "Type": "TEXT" },
+        { "Name": "MembershipTenure", "Type": "TEXT" },
+        { "Name": "EftPaymentMethod", "Type": "TEXT" },
+        { "Name": "LastLogin", "Type": "TEXT" },
+        { "Name": "HomeClub", "Type": "TEXT" },
+        { "Name": "UBATitle", "Type": "TEXT" },
+        { "Name": "UbaBankName", "Type": "TEXT" },
+        { "Name": "CreditCardStatus", "Type": "TEXT" },
+        { "Name": "ContractExpirationDate", "Type": "TEXT" },
+        { "Name": "DateCancelOn", "Type": "TEXT" },
+        { "Name": "DateHoldEnd", "Type": "TEXT" },
+        { "Name": "HoldReason", "Type": "TEXT" },
+        { "Name": "MembershipStatus", "Type": "TEXT" }
+    ]
+}

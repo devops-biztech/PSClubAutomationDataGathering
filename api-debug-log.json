@@ -1,0 +1,56 @@
+{
+  "Timestamp": "2025-10-01T14:35:35.2251712-07:00",
+  "Method": "POST",
+  "Headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhcGkucGFydG5lcnMuZGF4a28uY29tIiwiYXVkIjpbXSwiY2xpZW50cyI6W3siaWQiOjIyNDYsImNsaWVudElkIjoiQ0FfaGVhbHRoc3BvcnQiLCJ1c2FnZUtleSI6ImYzMjc5OGJkLTMzOTYtNGVmOC05NDg1LWU0NTU5MTM2Nzc2NyIsInBsYXRmb3JtIjoiQ0xVQl9BVVRPTUFUSU9OIiwicGxhdGZvcm1JZCI6M31dLCJpYXQiOjE3NTkzNTA5MjgsImV4cCI6MTc1OTM1NDUyOCwic2NvcGVzIjpbImNsdWJhdXRvbWF0aW9uOioiLCJidWxrZGF0YToqIl0sInN1YiI6InByb2RfaGVhbHRoX3Nwb3J0IiwicGFydG5lciI6IiIsImNsaWVudCI6IkhlYWx0aFNQT1JUIiwicHJpbmNpcGFsSWQiOjY2NCwiY3VzdG9tZXIiOiJIZWFsdGhTUE9SVCIsImdyYW50X3R5cGUiOiJjbGllbnRfY3JlZGVudGlhbHMifQ.bHzo7dtqX3i1EQmXwZ5aZLf-IhtHQ1bp_D0oVpLYfQM",
+    "Accept": "application/json"
+  },
+  "Uri": "https://api.partners.daxko.com/api/v1/reports/1",
+  "Response": "Internal Server Error",
+  "Body": {
+    "startDate": "2000-01-01",
+    "endDate": "2030-01-01",
+    "format": "csv",
+    "pageSize": "250",
+    "criteriaFields": {
+      "user": {
+        "memberstatus": [
+          "Active"
+        ]
+      }
+    },
+    "pageNumber": 358,
+    "outputFields": [
+      "SystemId",
+      "FirstName",
+      "LastName",
+      "Email",
+      "Age",
+      "Gender",
+      "BirthDate",
+      "Joined",
+      "LateFeeExempt",
+      "Status",
+      "City",
+      "GuestVisits",
+      "AccountHolder",
+      "DependentCount",
+      "Employer",
+      "LastCheckInDate",
+      "MemberSince",
+      "MembershipTenure",
+      "EftPaymentMethod",
+      "LastLogin",
+      "HomeClub",
+      "UBATitle",
+      "UbaBankName",
+      "CreditCardStatus",
+      "ContractExpirationDate",
+      "DateCancelOn",
+      "DateHoldEnd",
+      "HoldReason",
+      "MembershipStatus"
+    ]
+  },
+  "Error": "Response status code does not indicate success: 500 (Internal Server Error)."
+}
