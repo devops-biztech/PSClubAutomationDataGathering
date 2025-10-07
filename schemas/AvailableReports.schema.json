@@ -1,0 +1,9 @@
+{
+    "Name": "AvailableReports",
+    "APIURL": "https://api.partners.daxko.com/api/v1/available-reports",
+    "APITYPE": "GET",
+    "Columns": [
+        { "Name": "id", "Type": "INTEGER PRIMARY KEY" },
+        { "Name": "name", "Type": "TEXT NOT NULL" }
+    ]
+}

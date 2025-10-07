@@ -5,7 +5,7 @@ function Install-RequiredModules {
 
     foreach ($module in $Modules) {
         if (-not (Get-Module -ListAvailable -Name $module)) {
-            Write-Verbose "Installing missing module: $module"
+            Write-Host "Installing missing module: $module"
             Install-Module -Name $module -Scope CurrentUser -Force
         }
         Import-Module $module -ErrorAction Stop
@@ -31,8 +31,8 @@ access_token=
 refresh_time=
 "@ | Out-File -FilePath $envFilePath -Encoding UTF8 -Force
 
-        Write-Verbose "'.env' file created at $envFilePath."
-        Write-Verbose "Please fill in the required values before running the script again."
+        Write-Host "'.env' file created at $envFilePath."
+        Write-Host "Please fill in the required values before running the script again."
         exit 1
     } 
 }
@@ -81,13 +81,13 @@ function Test-DatabaseExistence {
     )
     $dir = Split-Path -Path $DataSource -Parent
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
-        Write-Verbose "No DB found. Creating..."
+        Write-Host "No DB found. Creating..."
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
     # Touch DB by running a harmless PRAGMA (creates file if it doesn't exist)
     Invoke-SqliteQuery -DataSource $DataSource -Query "PRAGMA journal_mode=WAL;" | Out-Null
-    Write-Verbose "DB ready..."
+    Write-Host "DB ready..."
 }
 function Test-TokenTableExists {
     [CmdletBinding()]
@@ -219,10 +219,6 @@ function Update-TokenInDb {
         Invoke-SqliteQuery -DataSource $DataSource -Query $updateQuery | Out-Null
     }
 }
-
-
-
-
 function Invoke-DbQuery {
     [CmdletBinding()]
     param(
@@ -238,29 +234,275 @@ function Invoke-DbQuery {
         Invoke-SqliteQuery -DataSource $DataSource -Query $Query
     }
 }
-function Get-JwtExpiry {
+function Get-CurrentTokens {
+    [CmdletBinding()]
+    param()
+
+    #initial setup
+    
+    Write-Host "Installing required modules to system..."
+    Install-RequiredModules
+    Write-Host "Checking if env file exists and creating if needed..."
+    Initialize-EnvFile
+    Write-Host "Importing the data from the env file into the Process variables..."
+    Import-Env -Path ".\.env" | Out-Null
+    Write-CurrentProcessVariables
+    #Now we check the database and get data from it
+    Write-Host "Checking the database at: $([System.Environment]::GetEnvironmentVariable('database_location', 'Process'))"
+    Test-DatabaseExistence -DataSource $([System.Environment]::GetEnvironmentVariable('database_location', 'Process'))
+    Test-TokenTableExists -DataSource $([System.Environment]::GetEnvironmentVariable('database_location', 'Process')) -TableName "AccessToken"
+    Test-TokenTableExists -DataSource $([System.Environment]::GetEnvironmentVariable('database_location', 'Process')) -TableName "RefreshToken"
+    Update-ProcessVariablesFromDatabase -DataSource $([System.Environment]::GetEnvironmentVariable('database_location', 'Process'))
+    Write-CurrentProcessVariables
+    #Now we check if the token needs to be refreshed
+    if(Test-AccessTokenExpired) {
+        Write-Host "Refreshing Token..."
+        Request-DaxkoToken
+        Update-TokenInDb -DataSource $([System.Environment]::GetEnvironmentVariable('database_location', 'Process')) -TableName "AccessToken" -Token $([System.Environment]::GetEnvironmentVariable('access_token', 'Process'))
+        Update-TokenInDb -DataSource $([System.Environment]::GetEnvironmentVariable('database_location', 'Process')) -TableName "RefreshToken" -Token $([System.Environment]::GetEnvironmentVariable('refresh_token', 'Process'))
+        Write-Host "Tokens updated."
+    } else {
+        Write-Host "Token still active..."
+    }
+    Write-CurrentProcessVariables
+}
+function Initialize-DataTables {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$Jwt
+        [Parameter(Mandatory)][string]$DataPath,
+        [Parameter()][string]$SchemaDirectory = ".\schemas"  # Default location for schema files
     )
-    try {
-        $parts = $Jwt.Split('.')
-        if ($parts.Count -lt 2) { return $null }
-        $payload = $parts[1]
-        # base64url -> base64
-        $payload = $payload.Replace('-', '+').Replace('_','/')
-        switch ($payload.Length % 4) {
-            2 { $payload += '==' }
-            3 { $payload += '=' }
+
+
+    # Get all schema files in the directory
+    $schemaFiles = Get-ChildItem -Path $SchemaDirectory -Filter "*.schema.json"
+
+    foreach ($schemaFile in $schemaFiles) {
+        $TableName = [System.IO.Path]::GetFileNameWithoutExtension($schemaFile.BaseName)
+        Write-Host "Checking if table '$TableName' exists in database '$DataPath'..."
+
+        $checkQuery = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='$TableName' LIMIT 1;"
+        $result = Invoke-DbQuery -DataSource $DataPath -Query $checkQuery
+
+        if ($result.Count -gt 0) {
+            Write-Host "Table '$TableName' already exists."
+        } else {
+            Write-Host "Table '$TableName' not found. Creating it..."
+
+            $schemaPath = Join-Path $SchemaDirectory "$TableName.schema.json"
+            if (-Not (Test-Path $schemaPath)) {
+                throw "Schema file not found for table '$TableName' at '$schemaPath'"
+            }
+
+            $schemaJson = Get-Content -Raw -Path $schemaPath | ConvertFrom-Json
+            $uniqueId = $schemaJson.uniqueID
+            $columns = $schemaJson.Columns | ForEach-Object {
+                $colName = $_.Name
+                $colType = $_.Type
+                # Quote column name if it starts with a digit or contains special characters
+                if ($colName -match '^[0-9]' -or $colName -match '[^a-zA-Z0-9_]') {
+                    $colName = "`"$colName`""  # double quotes for SQL
+                }
+                if ($colName -eq $uniqueId) {
+                    "$colName $colType UNIQUE"
+                } else {
+                    "$colName $colType"
+                }
+            }
+
+            $createQuery = @"
+CREATE TABLE IF NOT EXISTS $TableName (
+    $($columns -join ",`n    ")
+);
+"@
+
+            Invoke-DbQuery -DataSource $DataPath -Query $createQuery | Out-Null
+            Write-Host "Table '$TableName' created successfully."
         }
-        $json = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
-        if ($json.PSObject.Properties.Name -contains 'exp') {
-            return [int64]$json.exp
-        }
-        return $null
-    } catch {
-        return $null
     }
 }
 
+function Save-DataFromApiResponse {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$DataPath,
+        [Parameter()][string]$SchemaDirectory = ".\schemas"
+    )
+
+    $schemaFiles = Get-ChildItem -Path $SchemaDirectory -Filter "*.schema.json"
+
+    foreach ($schemaFile in $schemaFiles) {
+        $schema = Get-Content -Raw -Path $schemaFile.FullName | ConvertFrom-Json
+        $tableName = $schema.Name
+        $apiUrl = $schema.APIURL
+        $apiType = $schema.APITYPE.ToUpper()
+
+        Write-Host "`nFetching data for '$tableName' from '$apiUrl' using $apiType..."
+
+        # Get access token
+        $token = $([System.Environment]::GetEnvironmentVariable('access_token', 'Process'))
+
+        # Prepare headers
+        $headers = @{
+            Authorization = "Bearer $token"
+            Accept        = "application/json"
+        }
+
+        if ($apiType -eq "GET") {
+            $response = Invoke-DebugApiRequest -Uri $apiUrl -Method $apiType -Headers $headers
+            foreach ($item in $response.data) {
+                $columns = $schema.Columns | ForEach-Object { $_.Name }
+                $values = $columns | ForEach-Object {
+                    $val = $item.$_
+                    if ($val -is [string]) {
+                        "'$val'"
+                    } elseif ($null -eq $val) {
+                        "NULL"
+                    } else {
+                        "$val"
+                    }
+                }
+                $uniqueIdField = $schema.uniqueID
+                if ($uniqueIdField) {
+                    $uniqueIdValue = $item.$uniqueIdField
+                    $checkQuery = "SELECT COUNT(*) FROM $tableName WHERE $uniqueIdField = '$uniqueIdValue';"
+                    $exists = Invoke-DbQuery -DataSource $DataPath -Query $checkQuery
+
+                    if ($exists -gt 0) {
+                        # Build UPDATE query
+                        $setClause = ($columns | Where-Object { $_ -ne $uniqueIdField } | ForEach-Object {
+                            $val = $item.$_
+                            if ($val -is [string]) {
+                                "$_ = '$val'"
+                            } elseif ($null -eq $val) {
+                                "$_ = NULL"
+                            } else {
+                                "$_ = $val"
+                            }
+                        }) -join ", "
+                        $updateQuery = "UPDATE $tableName SET $setClause WHERE $uniqueIdField = '$uniqueIdValue';"
+                        Invoke-DbQuery -DataSource $DataPath -Query $updateQuery | Out-Null
+                    } else {
+                        # Insert as new
+                        $insertQuery = "INSERT INTO $tableName ($($columns -join ',')) VALUES ($($values -join ','));"
+                        Invoke-DbQuery -DataSource $DataPath -Query $insertQuery | Out-Null
+                    }
+                } else {
+                    # Fallback to insert or replace
+                    $insertQuery = "INSERT OR REPLACE INTO $tableName ($($columns -join ',')) VALUES ($($values -join ','));"
+                    Invoke-DbQuery -DataSource $DataPath -Query $insertQuery | Out-Null
+                }   
+            }
+            Write-Host "Saved data to '$tableName'."
+        }
+        elseif ($apiType -eq "POST") {
+            $pageNumber = 1
+            $done = $false
+            $outputFields = $schema.Columns | ForEach-Object { $_.Name }
+
+            while (-not $done) {
+                Write-Host "Working on page: $pageNumber ..."
+                if (-not $schema.RequestBody) {
+                    throw "POST request for '$tableName' is missing 'RequestBody' in schema."
+                }
+
+                $body = [PSCustomObject]@{}
+                foreach ($key in $schema.RequestBody.PSObject.Properties.Name) {
+                    $body | Add-Member -MemberType NoteProperty -Name $key -Value $schema.RequestBody.$key
+                }
+                $body | Add-Member -MemberType NoteProperty -Name "pageNumber" -Value $pageNumber
+                $body | Add-Member -MemberType NoteProperty -Name "outputFields" -Value $outputFields
+
+                $response = Invoke-DebugApiRequest -Uri $apiUrl -Method $apiType -Headers $headers -Body $body
+
+                if ($response.error -match "This result set only contains (\d+) page\(s\)") {
+                    Write-Host "Reached end of result set at page $pageNumber"
+                    $done = $true
+                    continue
+                }
+
+                foreach ($item in $response.data) {
+                    $columns = $schema.Columns | ForEach-Object { $_.Name }
+                    $values = $columns | ForEach-Object {
+                        $val = $item.$_
+                        if ($val -is [string]) {
+                            "'$val'"
+                        } elseif ($null -eq $val) {
+                            "NULL"
+                        } else {
+                            "$val"
+                        }
+                    }
+                    $insertQuery = "INSERT OR REPLACE INTO $tableName ($($columns -join ',')) VALUES ($($values -join ','));"
+                    Invoke-DbQuery -DataSource $DataPath -Query $insertQuery | Out-Null
+                }
+
+                Write-Host "Saved page $pageNumber to '$tableName'."
+                $pageNumber += 1
+            }
+        }
+        else {
+            throw "Unsupported API type '$apiType' for table '$tableName'"
+        }
+    }
+}
+function Invoke-DebugApiRequest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Uri,
+        [Parameter(Mandatory)][string]$Method,
+        [Parameter()][hashtable]$Headers,
+        [Parameter()][object]$Body,
+        [Parameter()][string]$LogPath = ".\api-debug-log.json"
+    )
+
+    Write-Host "Invoking $Method request to $Uri"
+    Write-Host "Logging response to $LogPath"
+
+    try {
+        $params = @{
+            Uri     = $Uri
+            Method  = $Method
+            Headers = $Headers
+        }
+
+        if ($Method -eq "POST" -and $Body) {
+            $params.Body = ($Body | ConvertTo-Json -Depth 10)
+            $params.ContentType = "application/json"
+        }
+
+        $response = Invoke-RestMethod @params
+
+        # Save full response to log
+        $log = @{
+            Timestamp = (Get-Date)
+            Uri       = $Uri
+            Method    = $Method
+            Headers   = $Headers
+            Body      = $Body
+            Response  = $response
+        }
+
+        $log | ConvertTo-Json -Depth 10 | Out-File -FilePath $LogPath
+        return $response
+    }
+    catch {
+        $errorLog = @{
+            Timestamp = (Get-Date)
+            Uri       = $Uri
+            Method    = $Method
+            Headers   = $Headers
+            Body      = $Body
+            Error     = $_.Exception.Message
+            Response  = $_.ErrorDetails.Message
+        }
+
+        $errorLog | ConvertTo-Json -Depth 10 | Out-File -FilePath $LogPath
+        throw "API call failed. See $LogPath for details."
+    }
+}
+
+function Get-Report {
+    #do stuff
+}
 
